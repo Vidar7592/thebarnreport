@@ -687,6 +687,19 @@ input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-sea
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
 "use strict";
+/* =====================================================================
+   SHARED RATINGS SETUP (Firebase)
+   Paste your Firebase web config here so everyone sees everyone's ratings.
+   Leave it as-is and ratings save on each person's own device only.
+   ===================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
 /* ================= DATA ================= */
 // [id, name, city, lat, lng, sports(h,b,s), teams]
 const RAW = [
@@ -1445,7 +1458,16 @@ resEl.addEventListener("click",e=>{const b=e.target.closest(".res");if(!b)return
 /* ================= BOTTOM SHEET ================= */
 const sheet=document.getElementById("sheet"),sheetBody=document.getElementById("sheetBody");
 let sheetState="hidden";
-const PEEK=()=>Math.min(360,Math.round(VH()*.48));
+let peekH=0;
+const PEEK=()=>peekH||Math.min(360,Math.round(VH()*.48));
+function measurePeek(){
+  // open the half-panel tall enough to show the Rate button above the bottom menu
+  const c=sheetBody.querySelector('[data-act=rate],.notice');
+  if(!c){peekH=0;return;}
+  const nav=document.getElementById("nav").offsetHeight||64;
+  const need=c.offsetTop+c.offsetHeight+nav+14;
+  peekH=Math.max(260,Math.min(need,Math.round(VH()*.8)));
+}
 function peekOffset(){return PEEK()}
 function sheetY(state){const h=sheet.offsetHeight;return state==="full"?0:state==="peek"?h-PEEK()-0:h+30;}
 function setSheet(state,anim=true){
@@ -1503,7 +1525,7 @@ function renderDetail(a){
   }
   if(a.custom)h+=`<p class="d-sub" style="margin-top:18px">${ic("pin")} Added by a fan</p>`;
   if(map&&S.canWrite)h+=`<button class="cta" data-act="move" class-ghost="1" style="background:var(--card2);color:var(--ink);box-shadow:none;margin-top:22px">${ic("pin")} Wrong spot? Move pin</button>${a.moved?`<p class="d-sub" style="text-align:center;margin-top:6px">Location corrected by a fan</p>`:""}`;
-  sheetBody.innerHTML=h;
+  sheetBody.innerHTML=h; measurePeek();
   // animate numbers
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     sheetBody.querySelectorAll(".ring-fg").forEach(c=>c.style.strokeDashoffset=c.dataset.to);
@@ -1549,7 +1571,7 @@ function openRate(id){
   rateBody.innerHTML=`
   <div class="q" style="animation-delay:40ms"><h4>${ic("thermo")} Temperature</h4><p>How did it feel in the stands?</p><div class="temps" id="tempPick">${TEMPS.map((t,i)=>`<button data-v="${i+1}" class="${draft.temp===i+1?"on":""}"><span>${t[0]}</span>${t[1]}</button>`).join("")}</div></div>
   ${CATS.map((c,ci)=>`<div class="q" style="animation-delay:${100+ci*60}ms"><h4>${CAT_EM[c.k]} ${c.label}</h4><p>${c.hint}</p><div class="stars" data-k="${c.k}">${[1,2,3,4,5].map(v=>`<button data-v="${v}" aria-label="${v} star" class="${draft[c.k]>=v?"on":""}">${STAR}</button>`).join("")}<span class="slabel">${WORDS[draft[c.k]]||""}</span></div>${c.k==="options"?tagPicker("ftags",FOOD_TAGS,draft.tags,"foodOther","What else? e.g. Shawarma, Perogies"):""}${c.k==="smell"?`<p style="margin:14px 0 0;font-weight:600;color:var(--ink2)">What does it smell like? <span style="font-weight:400;color:var(--muted)">(pick any)</span></p>`+tagPicker("stags",SMELL_TAGS,draft.smellTags,"smellOther","Describe it, e.g. burnt popcorn"):""}${c.k==="parking"?`<p style="margin:14px 0 0;font-weight:600;color:var(--ink2)">What's parking like? <span style="font-weight:400;color:var(--muted)">(pick any)</span></p>`+tagPicker("ptags",PARK_TAGS,draft.parkTags,"parkOther","e.g. $15 lot across the street"):""}</div>`).join("")}
-  <div class="q" style="animation-delay:300ms"><h4>${ic("chat")} Anything else?</h4><p>Optional — tips on seats, lines, best snack…</p><textarea id="cmt" maxlength="280" placeholder="Bring a hoodie, the upper bowl is freezing!">${esc(draft.comment)}</textarea><div class="count" id="cnt">${draft.comment.length}/280</div></div>`;
+  <div class="q" style="animation-delay:300ms"><h4>${ic("chat")} Anything else?</h4><p>Optional — tips on seats, lines, best snack…</p><textarea id="cmt" maxlength="280" placeholder="Bring a hoodie, the upper bowl is freezing!">${esc(draft.comment)}</textarea><div class="count" id="cnt">${draft.comment.length}/280</div>${S.mode==="shared"&&!S.user?`<label style="display:block;font-weight:600;font-size:14px;margin:14px 0 6px">Your name <span style="font-weight:400;color:var(--muted)">(optional, shown on your reviews)</span></label><input type="text" id="rvName" maxlength="24" placeholder="e.g. Rink Rat Ryan" value="${esc(myName())}" style="width:100%;height:46px;border:1.5px solid #2a2a2a;border-radius:12px;padding:0 12px;font-size:16px;outline:0;background:#080808;color:var(--ink)">`:""}</div>`;
   rateModal.classList.add("on"); rateBody.scrollTop=0; updateSubmit();
 }
 function tagPicker(id,list,sel,otherKey,ph){
@@ -1573,7 +1595,7 @@ rateBody.addEventListener("click",e=>{
   const ft=e.target.closest("#ftags button[data-t],#stags button[data-t],#ptags button[data-t]");
   if(ft){const arr={ftags:draft.tags,stags:draft.smellTags,ptags:draft.parkTags}[ft.parentNode.id];const t=ft.dataset.t;const i=arr.indexOf(t);if(i>=0)arr.splice(i,1);else arr.push(t);ft.classList.toggle("on",i<0);}
 });
-rateBody.addEventListener("input",e=>{const ok=e.target.dataset&&e.target.dataset.otherIn;if(ok){draft[ok]=e.target.value.slice(0,40);return;}if(e.target.id==="cmt"){draft.comment=e.target.value.slice(0,280);document.getElementById("cnt").textContent=draft.comment.length+"/280";}});
+rateBody.addEventListener("input",e=>{if(e.target.id==="rvName"){try{localStorage.setItem("tbr.name",tidy(e.target.value,24))}catch(_){}return;}const ok=e.target.dataset&&e.target.dataset.otherIn;if(ok){draft[ok]=e.target.value.slice(0,40);return;}if(e.target.id==="cmt"){draft.comment=e.target.value.slice(0,280);document.getElementById("cnt").textContent=draft.comment.length+"/280";}});
 function updateSubmit(){const ok=draft.temp&&draft.smell&&draft.options&&draft.quality&&draft.parking;const b=document.getElementById("rateSubmit");b.textContent=ok?((S.reviewsByUser[S.myId]||{})[draftId]?"Update rating":"Post rating"):"Rate all five to post";b.dataset.ok=ok?"1":"";}
 let saving=false;
 document.getElementById("rateSubmit").onclick=async()=>{
@@ -1598,13 +1620,15 @@ function celebrate(t){
 async function saveReview(id,r){
   const mine={...(S.reviewsByUser[S.myId]||{}),[id]:r};
   if(S.mode==="shared"){
-    try{await S.db.doc("reviews/"+S.myId).set({items:mine,updatedAt:Date.now()});}
+    try{await S.db.doc("reviews/"+S.myId).set(reviewsDoc(mine));}
     catch(e){return handleWriteErr(e)}
   }
   S.reviewsByUser[S.myId]=mine; STATS.clear();
   if(S.mode==="local"){const d=lsGet();d.reviews=mine;lsSet(d);}
   return true;
 }
+function myName(){try{return tidy(localStorage.getItem("tbr.name")||"",24)}catch(e){return ""}}
+function reviewsDoc(items){const d={items,updatedAt:Date.now()};if(!S.user){const n=myName();if(n)d.name=n;}return d;}
 async function savePlace(id,p){return savePlacesDoc({...(S.placesByUser[S.myId]||{}),[id]:p},S.fixesByUser[S.myId]||{});}
 async function saveFix(id,f){return savePlacesDoc(S.placesByUser[S.myId]||{},{...(S.fixesByUser[S.myId]||{}),[id]:f});}
 async function savePlacesDoc(items,fixes){
@@ -1618,7 +1642,7 @@ async function savePlacesDoc(items,fixes){
 }
 function handleWriteErr(e){
   const code=e&&e.code;
-  if(code==="invalid_argument"){S.canWrite=false;toast("You can view ratings but don't have permission to post here.");if(S.selected)renderDetail(BYID[S.selected]);}
+  if(code==="invalid_argument"||code==="permission-denied"){S.canWrite=false;toast("You can view ratings but don't have permission to post here.");if(S.selected)renderDetail(BYID[S.selected]);}
   else if(code==="quota_exceeded")toast("Storage is full — couldn't save.");
   else toast("Couldn't save right now — try again in a moment.");
   return false;
@@ -1641,15 +1665,18 @@ async function connectShared(tries=0){
   if(!db||!user)return;
   let id=null;try{id=await user.id();}catch(e){}
   if(!id)return;
-  S.db=db;S.user=user;
   try{const cw=await user.can("data.write");if(cw===false)S.canWrite=false;}catch(e){}
+  startShared(db,user,id);
+}
+function startShared(db,user,id){
+  S.db=db;S.user=user;
   // local ratings made before connecting
   const localRev=S.reviewsByUser.me||{}, localPl=S.placesByUser.me||{};
   S.mode="shared";S.myId=id;S.reviewsByUser={};S.placesByUser={};S.fixesByUser={};
   let gotR=false,gotP=false;
   const timer=setTimeout(()=>{if(!S.loadedShared)toast("Shared ratings can't be reached yet — showing what's loaded.")},10000);
   db.collection("reviews").onSnapshot(snap=>{
-    const next={};snap.docs.forEach(d=>{const v=d.data();if(v)next[d.id]=cleanReviews(v.items)});
+    const next={};snap.docs.forEach(d=>{const v=d.data();if(v){next[d.id]=cleanReviews(v.items);if(!S.user){const n=tidy(v.name,24);if(n)S.names[d.id]={name:n};}}});
     S.reviewsByUser=next; if(!snap.metadata.fromCache){S.loadedShared=true;clearTimeout(timer);if(!gotR){gotR=true;migrate("reviews",localRev);}}
     rebuild();
   },err=>{clearTimeout(timer);});
@@ -1660,6 +1687,24 @@ async function connectShared(tries=0){
   },err=>{});
   rebuild();
 }
+async function connectFirebase(){
+  const cfg=FIREBASE_CONFIG;
+  if(!cfg||!cfg.apiKey||/^PASTE/.test(cfg.apiKey)||!cfg.projectId)return false;
+  try{
+    const V="10.12.2",B="https://www.gstatic.com/firebasejs/"+V+"/";
+    const [appM,authM,fs]=await Promise.all([import(B+"firebase-app.js"),import(B+"firebase-auth.js"),import(B+"firebase-firestore.js")]);
+    const app=appM.initializeApp(cfg), auth=authM.getAuth(app), store=fs.getFirestore(app);
+    const u=await new Promise((res,rej)=>{const un=authM.onAuthStateChanged(auth,x=>{if(x){un();res(x)}});authM.signInAnonymously(auth).catch(rej);});
+    // small adapter so the rest of the app talks to Firestore the same way
+    const db={
+      doc:path=>({set:data=>fs.setDoc(fs.doc(store,path),data)}),
+      collection:name=>({onSnapshot:(next,err)=>fs.onSnapshot(fs.collection(store,name),
+        snap=>next({docs:snap.docs.map(d=>({id:d.id,data:()=>d.data()})),metadata:{fromCache:snap.metadata.fromCache}}),err)})
+    };
+    startShared(db,null,u.uid);
+    return true;
+  }catch(e){console.warn("Firebase connect failed",e);toast("Couldn't reach shared ratings — saving on this device for now.");return false;}
+}
 let migrated={};
 async function migrate(kind,local){
   // carry over anything rated on this device before shared storage was available
@@ -1668,8 +1713,7 @@ async function migrate(kind,local){
   const cur=(kind==="reviews"?S.reviewsByUser:S.placesByUser)[S.myId]||{};
   const add=keys.filter(k=>!cur[k]); if(!add.length)return;
   const merged={...cur};add.forEach(k=>merged[k]=local[k]);
-  const extra=kind==="places"?{fixes:S.fixesByUser[S.myId]||{}}:{};
-  try{await S.db.doc(kind+"/"+S.myId).set({items:merged,...extra,updatedAt:Date.now()});const d=lsGet();delete d[kind];lsSet(d);}catch(e){}
+  try{await S.db.doc(kind+"/"+S.myId).set(kind==="places"?{items:merged,fixes:S.fixesByUser[S.myId]||{},updatedAt:Date.now()}:reviewsDoc(merged));const d=lsGet();delete d[kind];lsSet(d);}catch(e){}
 }
 
 /* ================= VIEWS (Top / Mine) ================= */
@@ -1785,7 +1829,7 @@ renderChips(); initMap(); setSheet("hidden",false);
 (function(){const sp=document.getElementById("splash");const hide=()=>{sp.classList.add("hide");setTimeout(()=>sp.remove(),700)};
   let seen=false;try{seen=sessionStorage.getItem("tbr.splash")==="1";sessionStorage.setItem("tbr.splash","1")}catch(e){}
   if(seen){sp.remove();return;} sp.addEventListener("click",hide); setTimeout(hide,2300);})();
-connectShared();
+connectFirebase().then(ok=>{if(!ok)connectShared();});
 </script>
 </body>
 </html>
